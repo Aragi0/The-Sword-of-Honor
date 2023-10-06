@@ -2,6 +2,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using System.Runtime.InteropServices;
 public class PlayerMove : MonoBehaviour
 {
     // Variables para el movimiento
@@ -46,7 +47,9 @@ public class PlayerMove : MonoBehaviour
 
     // Variables para el escudo/rodar
     [Header("Escudo/Rodar")]
-    public bool isGuarding = false;
+    private bool estaEnGuardia = false;
+    private float tiempoUltimoUsoEscudo = 0.0f;
+    public float cooldownEscudo = 0.5f;
     public bool estaRodando = false;
 
     // Variables para otros
@@ -169,7 +172,7 @@ public class PlayerMove : MonoBehaviour
 
     private void HandleAttack()
     {
-        if (!isGuarding && !estaRodando && Input.GetMouseButtonDown(0) && TiempoDesdeUltimoAtaque() >= tiempoEntreAtaques && currentStamina >= ataqueStaminaCost)
+        if (!estaRodando && Input.GetMouseButtonDown(0) && TiempoDesdeUltimoAtaque() >= tiempoEntreAtaques && currentStamina >= ataqueStaminaCost)
         {
             IniciarAtaque();
         }
@@ -177,7 +180,7 @@ public class PlayerMove : MonoBehaviour
 
     private void AtaqueEspecial()
     {
-        if (!isGuarding && !estaRodando && Input.GetKeyDown(KeyCode.F) && !isAtaqueEspecialEnCurso)
+        if (!estaRodando && Input.GetKeyDown(KeyCode.F) && !isAtaqueEspecialEnCurso)
         {
             animacion.SetTrigger("especial");
             isAtaqueEspecialEnCurso = true;
@@ -251,7 +254,24 @@ public class PlayerMove : MonoBehaviour
     }
     public void EstaEnGuardia()
     {
-        isGuarding = Input.GetMouseButton(1);
-        animacion.SetBool("enGuardia", isGuarding);
+        // Verificar si ha pasado el tiempo de cooldown desde el último uso del escudo
+        if (Time.time - tiempoUltimoUsoEscudo >= cooldownEscudo)
+        {
+            // Si se presiona el botón derecho y no está rodando y no está en guardia, activa la animación
+            if (Input.GetMouseButtonDown(1) && !estaRodando && !estaEnGuardia)
+            {
+                animacion.SetTrigger("enGuardia");
+                estaEnGuardia = true;
+
+                // Actualizar el tiempo del último uso del escudo
+                tiempoUltimoUsoEscudo = Time.time;
+            }
+        }
+
+        // Si se libera el botón derecho, marcar que no está en guardia
+        if (Input.GetMouseButtonUp(1))
+        {
+            estaEnGuardia = false;
+        }
     }
 }

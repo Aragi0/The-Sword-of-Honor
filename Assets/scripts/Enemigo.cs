@@ -60,7 +60,7 @@ public class Enemigo : MonoBehaviour
 
         if (playerHealth != null)
         {
-            if (playerMoveScript != null && playerMoveScript.estaRodando || playerMoveScript.isGuarding)
+            if (playerMoveScript != null && playerMoveScript.estaRodando)
             {
                 Debug.Log("N0 Damage");
             }

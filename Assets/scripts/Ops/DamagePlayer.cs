@@ -30,7 +30,7 @@ public class DamagePlayer : MonoBehaviour
         if (playerMove != null)
         {
             // Si el jugador está rodando, no aplicar daño
-            if (playerMove.estaRodando || playerMove.isGuarding)
+            if (playerMove.estaRodando)
             {
                 Debug.Log("NO damage");
                 return;
