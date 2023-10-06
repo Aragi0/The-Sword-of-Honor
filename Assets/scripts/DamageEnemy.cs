@@ -20,11 +20,15 @@ public class DamageEnemy : MonoBehaviour
             hp -= damageArma;
             vidaScript.vidaActual = hp;
             vidaScript.RevisarVida();
+
         }
 
         if (hp <= 0)
         {
+            // Si no es el jugador, destruye el objeto
             Destroy(gameObject);
         }
+
     }
+
 }

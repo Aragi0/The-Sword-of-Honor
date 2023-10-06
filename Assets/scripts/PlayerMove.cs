@@ -1,17 +1,15 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
-
+using UnityEngine.SceneManagement;
 public class PlayerMove : MonoBehaviour
 {
-    public Rigidbody rb;
-    public Animator animacion;
-    public LayerMask collisionLayer;
-    private Transform cameraTransform;
-
+    // Variables para el movimiento
     [Header("Movimiento")]
     public float velocidadMovimiento = 5.0f;
     public float velocidadSprint = 7.0f;
 
+    // Variables para el ataque
     [Header("Ataque")]
     public float tiempoEntreAtaques = 0.1f;
     public float ataqueStaminaCost = 30.0f;
@@ -20,37 +18,61 @@ public class PlayerMove : MonoBehaviour
     private float duracionAtaqueEspecial = 0.5f;
     private float timeSinceLastAction = 0.0f;
 
+    // Variables para la cámara
     [Header("Cámara")]
-    public float sensibilidadRaton = 100.0f;
-    public float maxVerticalRotation = 90.0f;
     public float rotationSmoothness = 10.0f;
-    private float rotacionX = 0.0f;
 
+    // Variables para la vida
+    [Header("Vida")]
+    public Image ImagenBarraVida;
+    public int vidaMax;
+    public float vidaActual;
+
+    // Variables para la stamina
     [Header("Stamina")]
     public Image staminaBarImage;
     private float currentStamina;
     public float maxStamina = 100.0f;
-    public float RegenerarStamna = 20.0f;
+    public float RegenerarStaminaRate = 20.0f;
     public float rodarStaminaCost = 20.0f;
 
+    // Variables para el poise
+    [Header("Poise")]
+    public Image PoiseBarImage;
+    private float currentPoise;
+    public float maxPoise = 100.0f;
+    public float RegenerarPoiseRate = 10.0f;
+    public float RegenerarPoiseEscudoRate = 5.0f;
+
+    // Variables para el escudo/rodar
     [Header("Escudo/Rodar")]
     public bool isGuarding = false;
     public bool estaRodando = false;
 
+    // Variables para otros
     [Header("Otros")]
     public bool conArma;
+    private Rigidbody rb;
+    private Animator animacion;
+    private Transform cameraTransform;
+    public string esena = "MainMenu";
 
     private void Start()
     {
+        rb = GetComponent<Rigidbody>();
         animacion = GetComponent<Animator>();
         cameraTransform = Camera.main.transform;
         Cursor.lockState = CursorLockMode.Locked;
         currentStamina = maxStamina;
+        currentPoise = maxPoise;
+        vidaActual = vidaMax;
+        RevisarVida();
     }
 
     private void FixedUpdate()
     {
         MoverPersonaje();
+        RevisarVida();
     }
 
     private void Update()
@@ -58,7 +80,11 @@ public class PlayerMove : MonoBehaviour
         HandleInput();
         ActualizarEstado();
         RotarPersonaje();
-        RotarCamara();
+        if (vidaActual <= 0)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            SceneManager.LoadScene(esena);
+        }
     }
 
     private void HandleInput()
@@ -67,6 +93,7 @@ public class PlayerMove : MonoBehaviour
         HandleAttack();
         AtaqueEspecial();
         RegenerarStamina();
+        Poise();
         EstaEnGuardia();
     }
 
@@ -75,8 +102,6 @@ public class PlayerMove : MonoBehaviour
         ControlarAnimaciones();
         UpdateStaminaBar();
     }
-
-    // Resto de tus métodos existentes...
 
     private void MoverPersonaje()
     {
@@ -106,6 +131,15 @@ public class PlayerMove : MonoBehaviour
             rb.MovePosition(hit.point - movement.normalized * 0.1f);
         }
     }
+    private Vector3 ObtenerInputDireccion()
+    {
+        float x = Input.GetAxis("Horizontal");
+        float y = Input.GetAxis("Vertical");
+        Vector3 inputDirection = cameraTransform.forward * y + cameraTransform.right * x;
+        inputDirection.y = 0f;
+        inputDirection.Normalize();
+        return inputDirection;
+    }
 
     private void RotarPersonaje()
     {
@@ -113,21 +147,9 @@ public class PlayerMove : MonoBehaviour
 
         if (inputDirection != Vector3.zero)
         {
-            // Proyecta la dirección al plano horizontal (ignora la componente Y)
-            Vector3 horizontalDirection = inputDirection;
-            horizontalDirection.y = 0;
-
-            Quaternion targetRotation = Quaternion.LookRotation(horizontalDirection);
-
+            Quaternion targetRotation = Quaternion.LookRotation(inputDirection);
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSmoothness * Time.fixedDeltaTime);
         }
-    }
-
-    private Vector3 ObtenerInputDireccion()
-    {
-        float x = Input.GetAxis("Horizontal");
-        float y = Input.GetAxis("Vertical");
-        return cameraTransform.forward * y + cameraTransform.right * x;
     }
 
     private void ControlarAnimaciones()
@@ -137,17 +159,17 @@ public class PlayerMove : MonoBehaviour
         animacion.SetBool("enGuardia", Input.GetMouseButton(1));
         animacion.SetFloat("VelX", x);
         animacion.SetFloat("VelY", y);
-        animacion.SetBool("estaRodando", estaRodando);  // Informar si está rodando
+        animacion.SetBool("estaRodando", estaRodando);
+
         if (estaRodando && animacion.GetCurrentAnimatorStateInfo(0).IsName("Rodar") && animacion.GetCurrentAnimatorStateInfo(0).normalizedTime >= 1.0f)
         {
-            estaRodando = false;  // Desmarcar cuando ha terminado de rodar
+            estaRodando = false;
         }
     }
 
     private void HandleAttack()
     {
-        if (!isGuarding && !estaRodando && Input.GetMouseButtonDown(0) &&
-            TiempoDesdeUltimoAtaque() >= tiempoEntreAtaques && currentStamina >= ataqueStaminaCost)
+        if (!isGuarding && !estaRodando && Input.GetMouseButtonDown(0) && TiempoDesdeUltimoAtaque() >= tiempoEntreAtaques && currentStamina >= ataqueStaminaCost)
         {
             IniciarAtaque();
         }
@@ -159,14 +181,12 @@ public class PlayerMove : MonoBehaviour
         {
             animacion.SetTrigger("especial");
             isAtaqueEspecialEnCurso = true;
-            // Llamar a una función para manejar el final del ataque especial
             Invoke("FinalizarAtaqueEspecial", duracionAtaqueEspecial);
         }
     }
 
     private void FinalizarAtaqueEspecial()
     {
-        // Llamar a esta función cuando el ataque especial haya concluido
         isAtaqueEspecialEnCurso = false;
     }
 
@@ -179,15 +199,23 @@ public class PlayerMove : MonoBehaviour
         UpdateStaminaBar();
     }
 
-
-
     private void RegenerarStamina()
     {
         if (Time.time - timeSinceLastAction >= 0.5f && currentStamina < maxStamina)
         {
-            currentStamina += RegenerarStamna * Time.deltaTime;
+            currentStamina += RegenerarStaminaRate * Time.deltaTime;
             currentStamina = Mathf.Clamp(currentStamina, 0f, maxStamina);
             UpdateStaminaBar();
+        }
+    }
+
+    private void Poise()
+    {
+        if (Time.time - timeSinceLastAction >= 0.5f && currentPoise < maxPoise)
+        {
+            currentPoise += RegenerarPoiseRate * Time.deltaTime;
+            currentPoise = Mathf.Clamp(currentPoise, 0f, maxPoise);
+            UpdatePoiseBar();
         }
     }
 
@@ -195,6 +223,7 @@ public class PlayerMove : MonoBehaviour
     {
         return Time.time - tiempoUltimoAtaque;
     }
+
     private void ControlarRodar()
     {
         if (Input.GetKeyDown(KeyCode.Space) && !animacion.GetCurrentAnimatorStateInfo(0).IsName("Rodar") && currentStamina >= rodarStaminaCost)
@@ -206,39 +235,23 @@ public class PlayerMove : MonoBehaviour
             UpdateStaminaBar();
         }
     }
-    private void RotarCamara()
-    {
-        float mouseX = Input.GetAxis("Mouse X") * sensibilidadRaton * Time.deltaTime;
-        float mouseY = Input.GetAxis("Mouse Y") * sensibilidadRaton * Time.deltaTime;
-
-        mouseX *= sensibilidadRaton;  // Multiplica por la sensibilidad del ratón
-        mouseY *= sensibilidadRaton;  // Multiplica por la sensibilidad del ratón
-
-        transform.Rotate(Vector3.up, mouseX);
-
-        rotacionX -= mouseY;
-        rotacionX = Mathf.Clamp(rotacionX, -maxVerticalRotation, maxVerticalRotation);
-
-        Quaternion targetRotation = Quaternion.Euler(rotacionX, 0.0f, 0.0f);
-        cameraTransform.localRotation = targetRotation;
-    }
 
     private void UpdateStaminaBar()
     {
         staminaBarImage.fillAmount = currentStamina / maxStamina;
     }
+
+    private void UpdatePoiseBar()
+    {
+        PoiseBarImage.fillAmount = currentPoise / maxPoise;
+    }
+    public void RevisarVida()
+    {
+        ImagenBarraVida.fillAmount = vidaActual / vidaMax;
+    }
     public void EstaEnGuardia()
     {
-        if (Input.GetMouseButton(1))
-        {
-            isGuarding = true;
-            animacion.SetBool("enGuardia", true);
-
-        }
-        else
-        {
-            isGuarding = false;
-            animacion.SetBool("enGuardia", false);  // Desactiva la animación de ponerse en guardia
-        }
+        isGuarding = Input.GetMouseButton(1);
+        animacion.SetBool("enGuardia", isGuarding);
     }
 }
